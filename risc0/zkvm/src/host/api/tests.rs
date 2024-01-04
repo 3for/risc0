@@ -343,6 +343,7 @@ fn stark2snark() {
     receipt.verify(MULTI_TEST_ID).unwrap();
 }
 
+#[test]
 fn lift_resolve() {
     let mut client = TestClient::new();
 
