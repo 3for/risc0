@@ -15,10 +15,8 @@
 use std::{
     net::{SocketAddr, TcpListener},
     path::PathBuf,
-    thread,
-    // io::Write,
-    // path::Path,
     process::Command,
+    thread,
 };
 
 use anyhow::Result;
@@ -30,9 +28,8 @@ use test_log::test;
 
 use super::{Asset, AssetRequest, ConnectionWrapper, Connector, TcpConnection};
 use crate::{
-    Groth16Receipt, Groth16Seal,
-    recursion::SuccinctReceipt, ApiClient, ApiServer, ExecutorEnv, InnerReceipt, ProverOpts,
-    Receipt, SegmentReceipt, SessionInfo, VerifierContext,
+    recursion::SuccinctReceipt, ApiClient, ApiServer, ExecutorEnv, Groth16Receipt, Groth16Seal,
+    InnerReceipt, ProverOpts, Receipt, SegmentReceipt, SessionInfo, VerifierContext,
 };
 
 struct TestClientConnector {
@@ -227,11 +224,7 @@ fn lift_join_identity() {
 
 #[test]
 fn stark2snark() {
-    // const CEREMONY_DIR: &str = "ceremony";
     const SEAL_FILE: &str = "seal.bin";
-    // const WITNESS_FILE: &str = "output.wtns";
-    // const PROOF_FILE: &str = "proof.json";
-    // const PUBLIC_FILE: &str = "public.json";
 
     let cycles = 0u32;
     let env = ExecutorEnv::builder()
@@ -346,8 +339,11 @@ fn stark2snark() {
         .arg("run")
         .arg("--rm")
         .arg("-v")
-        .arg(&format!("{:}:/app/seal.bin:ro", seal_path.to_string_lossy()))
-        .arg("prover")
+        .arg(&format!(
+            "{:}:/app/seal.bin:ro",
+            seal_path.to_string_lossy()
+        ))
+        .arg("angelocapossele/risc0-groth16-prover:v0.0.1")
         .output()
         .unwrap();
 
@@ -383,15 +379,15 @@ fn stark2snark() {
         .collect();
     let c = c.expect("Failed to decode snark 'c' values");
 
-    let groth16_seal = Groth16Seal{a, b, c};    
+    let groth16_seal = Groth16Seal { a, b, c };
     let receipt = Receipt::new(
-            InnerReceipt::Groth16(Groth16Receipt {
-                seal: groth16_seal.to_vec(),
-                claim: rollup_receipt.get_claim().unwrap(),
-            }),
-            journal,
-        );
-    
+        InnerReceipt::Groth16(Groth16Receipt {
+            seal: groth16_seal.to_vec(),
+            claim: rollup_receipt.get_claim().unwrap(),
+        }),
+        journal,
+    );
+
     receipt.verify(MULTI_TEST_ID).unwrap();
 }
 
