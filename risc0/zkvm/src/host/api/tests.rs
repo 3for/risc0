@@ -15,7 +15,6 @@
 use std::{
     net::{SocketAddr, TcpListener},
     path::PathBuf,
-    process::Command,
     thread,
 };
 
@@ -29,8 +28,8 @@ use test_log::test;
 
 use super::{Asset, AssetRequest, ConnectionWrapper, Connector, TcpConnection};
 use crate::{
-    recursion::SuccinctReceipt, ApiClient, ApiServer, ExecutorEnv, Groth16Receipt, Groth16Seal,
-    InnerReceipt, ProverOpts, Receipt, SegmentReceipt, SessionInfo, VerifierContext,
+    recursion::SuccinctReceipt, ApiClient, ApiServer, ExecutorEnv, InnerReceipt, ProverOpts,
+    Receipt, SegmentReceipt, SessionInfo, VerifierContext,
 };
 
 struct TestClientConnector {
