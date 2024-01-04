@@ -321,10 +321,21 @@ fn guest_error_forwarding() {
     TestClient::new().execute(env, binary);
 }
 
-#[cfg(feature = "docker")]
+#[cfg(all(feature = "docker", test))]
 mod tests {
-    use crate::{Groth16Receipt, Groth16Seal};
     use std::process::Command;
+
+    use anyhow::Result;
+    use risc0_zkvm_methods::{multi_test::MultiTestSpec, MULTI_TEST_ELF, MULTI_TEST_ID};
+    use tempfile::tempdir;
+    use test_log::test;
+
+    use super::Asset;
+    use crate::host::api::tests::TestClient;
+    use crate::{
+        ExecutorEnv, Groth16Receipt, Groth16Seal, InnerReceipt, ProverOpts, Receipt,
+        VerifierContext,
+    };
 
     #[test]
     fn stark2snark() {
