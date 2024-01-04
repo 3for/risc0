@@ -377,11 +377,19 @@ mod riscv {
 
 #[cfg(feature = "docker")]
 mod docker {
-    use risc0_zkvm_methods::{multi_test::MultiTestSpec, MULTI_TEST_ELF};
+    use std::process::Command;
+
+    use risc0_zkvm_methods::{multi_test::MultiTestSpec, MULTI_TEST_ELF, MULTI_TEST_ID};
+    use tempfile::tempdir;
     use test_log::test;
 
     use super::prove_session_fast;
-    use crate::{ExecutorEnv, ExecutorImpl, ExitCode};
+    use crate::{
+        get_prover_server,
+        recursion::{identity_p254, join, lift},
+        ExecutorEnv, ExecutorImpl, ExitCode, Groth16Receipt, Groth16Seal, InnerReceipt, ProverOpts,
+        Receipt, SegmentReceipt, VerifierContext,
+    };
 
     #[test]
     fn pause_continue() {
@@ -441,6 +449,106 @@ mod docker {
         {
             assert_eq!(receipt.index, idx as u32);
         }
+    }
+
+    #[test]
+    fn stark2snark() {
+        const SEAL_FILE: &str = "seal.bin";
+
+        let cycles = 0u32;
+        let env = ExecutorEnv::builder()
+            .write(&MultiTestSpec::BusyLoop { cycles })
+            .unwrap()
+            .build()
+            .unwrap();
+
+        let mut exec = ExecutorImpl::from_elf(env, MULTI_TEST_ELF).unwrap();
+        let session = exec.run().unwrap();
+        let segments = session.resolve().unwrap();
+
+        let opts = ProverOpts::default();
+        let prover = get_prover_server(&opts).unwrap();
+
+        let ctx = VerifierContext::default();
+        let segment_receipts: Vec<SegmentReceipt> = segments
+            .iter()
+            .map(|x| prover.prove_segment(&ctx, x).unwrap())
+            .collect();
+
+        let mut rollup = lift(&segment_receipts[0]).unwrap();
+        let ctx = VerifierContext::default();
+        for receipt in &segment_receipts[1..] {
+            let rec_receipt = lift(receipt).unwrap();
+            rec_receipt.verify_integrity_with_context(&ctx).unwrap();
+            rollup = join(&rollup, &rec_receipt).unwrap();
+            rollup.verify_integrity_with_context(&ctx).unwrap();
+        }
+
+        let receipt_ident = identity_p254(&rollup).expect("Running prover failed");
+
+        let work_dir = tempdir().expect("Failed to create tmpdir");
+        let seal_path = work_dir.path().join(SEAL_FILE);
+        std::fs::write(&seal_path, &receipt_ident.get_seal_bytes())
+            .expect("Failed to write seal-to-json stdout to disk");
+
+        let journal = session.journal.unwrap().bytes;
+
+        let rollup_receipt = Receipt::new(InnerReceipt::Succinct(rollup), journal.clone());
+        rollup_receipt.verify(MULTI_TEST_ID).unwrap();
+
+        let output = Command::new("docker")
+            .arg("run")
+            .arg("--rm")
+            .arg("-v")
+            .arg(&format!(
+                "{:}:/app/seal.bin:ro",
+                seal_path.to_string_lossy()
+            ))
+            .arg("angelocapossele/risc0-groth16-prover:v0.0.1")
+            .output()
+            .unwrap();
+
+        let snark_str = String::from_utf8(output.stdout).unwrap();
+        let snark_str = format!("[{snark_str}]"); // make the output valid json
+
+        let raw_proof: (Vec<String>, Vec<Vec<String>>, Vec<String>, Vec<String>) =
+            serde_json::from_str(&snark_str).unwrap();
+        let a: Result<Vec<Vec<u8>>, hex::FromHexError> = raw_proof
+            .0
+            .into_iter()
+            .map(|elm| hex::decode(&elm[2..]))
+            .collect();
+        let a = a.expect("Failed to decode snark 'a' values");
+
+        let b: Result<Vec<Vec<Vec<u8>>>, hex::FromHexError> = raw_proof
+            .1
+            .into_iter()
+            .map(|inner| {
+                inner
+                    .into_iter()
+                    .map(|elm| hex::decode(&elm[2..]))
+                    .collect::<Result<Vec<Vec<u8>>, hex::FromHexError>>()
+            })
+            .collect();
+        let b = b.expect("Failed to decode snark 'b' values");
+
+        let c: Result<Vec<Vec<u8>>, hex::FromHexError> = raw_proof
+            .2
+            .into_iter()
+            .map(|elm| hex::decode(&elm[2..]))
+            .collect();
+        let c = c.expect("Failed to decode snark 'c' values");
+
+        let groth16_seal = Groth16Seal { a, b, c };
+        let receipt = Receipt::new(
+            InnerReceipt::Groth16(Groth16Receipt {
+                seal: groth16_seal.to_vec(),
+                claim: rollup_receipt.get_claim().unwrap(),
+            }),
+            journal,
+        );
+
+        receipt.verify(MULTI_TEST_ID).unwrap();
     }
 }
 
