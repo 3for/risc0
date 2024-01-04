@@ -322,7 +322,7 @@ fn guest_error_forwarding() {
 }
 
 #[cfg(all(feature = "docker", test))]
-mod tests {
+mod docker {
     use std::process::Command;
 
     use anyhow::Result;
