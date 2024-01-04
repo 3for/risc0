@@ -240,6 +240,7 @@ fn lift_join_identity() {
     rollup_receipt.verify(MULTI_TEST_ID).unwrap();
 }
 
+#[cfg(feature = "docker")]
 #[test]
 fn stark2snark() {
     const SEAL_FILE: &str = "seal.bin";
@@ -287,72 +288,6 @@ fn stark2snark() {
     let rollup_receipt = Receipt::new(InnerReceipt::Succinct(rollup), journal.clone());
     rollup_receipt.verify(MULTI_TEST_ID).unwrap();
 
-    // let ceremony_path = Path::new("../..").join(CEREMONY_DIR);
-    // if !ceremony_path.exists() {
-    //     panic!("Missing ceremony path");
-    // }
-
-    // let seal_to_json_path = ceremony_path.join("seal-to-json");
-
-    // println!("Running seal-to-json");
-    // let mut child = Command::new(seal_to_json_path)
-    //     .stdin(Stdio::piped())
-    //     .stdout(Stdio::piped())
-    //     .spawn()
-    //     .unwrap();
-
-    // if let Some(mut stdin) = child.stdin.take() {
-    //     stdin.write_all(&receipt_ident.get_seal_bytes()).unwrap();
-    // }
-
-    // let output = child.wait_with_output().unwrap();
-    // if !output.status.success() {
-    //     panic!("Failed to run seal-to-json");
-    // }
-
-    // println!("Running verify");
-    // let verify_bin = ceremony_path.join("verify_cpp").join("verify");
-    // let witness_path = work_dir.path().join(WITNESS_FILE);
-    // let child = Command::new(verify_bin)
-    //     .arg(&seal_path)
-    //     .arg(&witness_path)
-    //     .spawn()
-    //     .unwrap();
-
-    // let res = child.wait_with_output().unwrap();
-    // if !res.status.success() {
-    //     panic!("Failed to run verify");
-    // }
-
-    // println!("Running rapidsnark");
-    // let zkey_file = ceremony_path.join("verify_final.zkey");
-    // let proof_file = work_dir.path().join(PROOF_FILE);
-    // let public_file = work_dir.path().join(PUBLIC_FILE);
-
-    // let child = Command::new("rapidsnark")
-    //     .arg(zkey_file)
-    //     .arg(witness_path)
-    //     .arg(&proof_file)
-    //     .arg(&public_file)
-    //     .spawn()
-    //     .unwrap();
-    // let res = child.wait_with_output().unwrap();
-    // if !res.status.success() {
-    //     panic!("Failed to run rapidsnark");
-    // }
-
-    // let output = Command::new("snarkjs")
-    //     .arg("zkey")
-    //     .arg("export")
-    //     .arg("soliditycalldata")
-    //     .arg(&public_file)
-    //     .arg(&proof_file)
-    //     .output()
-    //     .unwrap();
-    // if !output.status.success() {
-    //     panic!("Failed to run snarkjs");
-    // }
-
     let output = Command::new("docker")
         .arg("run")
         .arg("--rm")
@@ -367,7 +302,6 @@ fn stark2snark() {
 
     let snark_str = String::from_utf8(output.stdout).unwrap();
     let snark_str = format!("[{snark_str}]"); // make the output valid json
-    println!("{snark_str}");
 
     let raw_proof: (Vec<String>, Vec<Vec<String>>, Vec<String>, Vec<String>) =
         serde_json::from_str(&snark_str).unwrap();
@@ -405,6 +339,8 @@ fn stark2snark() {
         }),
         journal,
     );
+
+    receipt.verify(MULTI_TEST_ID).unwrap();
 }
 
 fn lift_resolve() {
